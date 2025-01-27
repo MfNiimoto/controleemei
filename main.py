@@ -2,8 +2,8 @@ from PyQt6 import QtWidgets
 import sqlite3
 import sys
 
-from login import Ui_Form as UiLogin
-from paineladministrador import Ui_MainWindow as UiAdminPanel
+from login import Ui_LoginForm as UiLogin 
+from paineladministrador import Ui_PainelAdministrador as UiAdminPanel
 from mainwindow import Ui_MainWindow as UiMainWindow
 
 class LoginScreen(QtWidgets.QMainWindow):
