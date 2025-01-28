@@ -35,9 +35,52 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
 
     def open_admin_panel(self):
         from paineladministrador import Ui_PainelAdministrador
-        self.admin_panel = QtWidgets.QWidget()
-        self.ui_admin = Ui_PainelAdministrador()
-        self.ui_admin.setupUi(self.admin_panel)
+
+        class AdminPanel(QtWidgets.QWidget):
+            def __init__(self):
+                super().__init__()
+                self.ui = Ui_PainelAdministrador()
+                self.ui.setupUi(self)
+
+                # Conectar o botão de salvar ao método de salvar dados
+                self.ui.salvarCadastroButton.clicked.connect(self.save_device)
+
+            def save_device(self):
+                nome = self.ui.nomeTxt.text()
+                matricula = self.ui.matriculaTxt.text()
+                modelo = self.ui.modeloTxt.text()
+                emei = self.ui.emeiTxt.text()
+                emei2 = self.ui.emei2Txt.text()
+
+                # Salvar os dados no banco de dados
+                with sqlite3.connect('dados.db') as conn:
+                    cursor = conn.cursor()
+                    # Criar a tabela se não existir
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS aparelhos (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            nome TEXT NOT NULL,
+                            matricula INTEGER NOT NULL,
+                            modelo TEXT NOT NULL,
+                            emei TEXT NOT NULL,
+                            emei2 TEXT NOT NULL
+                        )
+                    ''')
+                    # Inserir os dados na tabela
+                    cursor.execute('''
+                        INSERT INTO aparelhos (nome, matricula, modelo, emei, emei2)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (nome, matricula, modelo, emei, emei2))
+                    conn.commit()
+
+                QtWidgets.QMessageBox.information(self, "Sucesso", "Dados salvos com sucesso!")
+                self.ui.nomeTxt.clear()
+                self.ui.matriculaTxt.clear()
+                self.ui.modeloTxt.clear()
+                self.ui.emeiTxt.clear()
+                self.ui.emei2Txt.clear()
+
+        self.admin_panel = AdminPanel()
         self.admin_panel.show()
         self.close()
 
