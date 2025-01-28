@@ -45,6 +45,12 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 # Conectar o botão de salvar ao método de salvar dados
                 self.ui.salvarCadastroButton.clicked.connect(self.save_device)
 
+                # Conectar o botão de deletar ao método de deletar dados
+                self.ui.deletarCadastroButton.clicked.connect(self.delete_device)
+
+                # Carregar os dispositivos cadastrados
+                self.load_devices()
+
             def save_device(self):
                 nome = self.ui.nomeTxt.text()
                 matricula = self.ui.matriculaTxt.text()
@@ -80,13 +86,69 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 self.ui.emeiTxt.clear()
                 self.ui.emei2Txt.clear()
 
+                # Atualizar a lista de dispositivos
+                self.load_devices()
+
+            def delete_device(self):
+                # Obter o item selecionado na TreeWidget
+                selected_item = self.ui.cadastroAparelhosTwidget.currentItem()
+
+                if selected_item:
+                    # Obter o nome do dispositivo selecionado
+                    nome = selected_item.text(0)
+                    aparelho = selected_item.text(1)
+
+                    # Excluir o registro do banco de dados
+                    with sqlite3.connect('dados.db') as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM aparelhos WHERE nome = ? AND modelo = ?", (nome, aparelho))
+                        conn.commit()
+
+                    # Atualizar a lista de dispositivos
+                    self.load_devices()
+                    QtWidgets.QMessageBox.information(self, "Sucesso", "Dispositivo excluído com sucesso!")
+                else:
+                    QtWidgets.QMessageBox.warning(self, "Erro", "Nenhum dispositivo selecionado!")
+
+            def load_devices(self):
+                # Limpar o widget antes de carregar os dados
+                self.ui.cadastroAparelhosTwidget.clear()
+
+                # Conectar ao banco de dados e buscar os dados
+                with sqlite3.connect('dados.db') as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT nome, modelo FROM aparelhos")
+                    devices = cursor.fetchall()
+
+                # Preencher o TreeWidget com os dados
+                self.ui.cadastroAparelhosTwidget.setHeaderLabels(["Nome", "Modelo"])
+                for nome, modelo in devices:
+                    item = QtWidgets.QTreeWidgetItem([nome, modelo])
+                    self.ui.cadastroAparelhosTwidget.addTopLevelItem(item)
+
         self.admin_panel = AdminPanel()
         self.admin_panel.show()
         self.close()
 
-    def open_user_panel(self):
-        QtWidgets.QMessageBox.information(self, "Info", "Painel de usuário ainda não implementado.")
-        self.close()
+    def open_user_panel(self): # executar a mainwindow.py
+        from mainwindow import Ui_MainWindow
+
+        class UserPanel(QtWidgets.QWidget):
+            def __init__(self):
+                super().__init__()
+                self.ui = Ui_MainWindow()
+                self.ui.setupUi(self)
+
+                # Conectar o botão de salvar ao método de salvar dados
+                self.ui.salvarCadastroButton.clicked.connect(self.save_device)
+
+                # Conectar o botão de deletar ao método de deletar dados
+                self.ui.deletarCadastroButton.clicked.connect(self.delete_device)
+
+                # Carregar os dispositivos cadastrados
+                self.load_devices()
+
+            
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
