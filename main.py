@@ -2,9 +2,8 @@ from PyQt6 import QtWidgets
 import sqlite3
 import sys
 
-from login import Ui_LoginForm as UiLogin 
-from paineladministrador import Ui_PainelAdministrador as UiAdminPanel
-from mainwindow import Ui_MainWindow as UiMainWindow
+# Importação da classe gerada pelo pyuic6 a partir do arquivo login.ui
+from login import Ui_MainWindow as UiLogin
 
 class LoginScreen(QtWidgets.QMainWindow):
     def __init__(self):
@@ -12,12 +11,14 @@ class LoginScreen(QtWidgets.QMainWindow):
         self.ui = UiLogin()
         self.ui.setupUi(self)
 
+        # Conecta o botão de login ao método de verificação de login
         self.ui.loginButton.clicked.connect(self.handle_login)
 
     def handle_login(self):
         username = self.ui.usernameField.text()
         password = self.ui.passwordField.text()
 
+        # Verificação no banco de dados
         with sqlite3.connect('dados.db') as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT role FROM user WHERE username = ? AND password = ?", (username, password))
@@ -26,45 +27,30 @@ class LoginScreen(QtWidgets.QMainWindow):
             if result:
                 role = result[0]
                 if role == 'admin':
-                    main_app.show_admin_panel()
+                    self.open_admin_panel()
                 else:
-                    main_app.show_user_panel()
+                    self.open_user_panel()
             else:
                 self.ui.errorLabel.setText("Usuário ou senha inválidos!")
 
-class AdminPanel(QtWidgets.QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.ui = UiAdminPanel()
-        self.ui.setupUi(self)
+    def open_admin_panel(self):
+        from paineladministrador import Ui_MainWindow as UiAdminPanel
+        self.admin_panel = QtWidgets.QMainWindow()
+        self.ui_admin = UiAdminPanel()
+        self.ui_admin.setupUi(self.admin_panel)
+        self.admin_panel.show()
+        self.close()
 
-class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.ui = UiMainWindow()
-        self.ui.setupUi(self)
-
-class MainApp(QtWidgets.QStackedWidget):
-    def __init__(self):
-        super().__init__()
-        self.login_screen = LoginScreen()
-        self.admin_panel = AdminPanel()
-        self.main_window = MainWindow()
-
-        self.addWidget(self.login_screen)
-        self.addWidget(self.admin_panel)
-        self.addWidget(self.main_window)
-
-        self.setCurrentWidget(self.login_screen)
-
-    def show_admin_panel(self):
-        self.setCurrentWidget(self.admin_panel)
-
-    def show_user_panel(self):
-        self.setCurrentWidget(self.main_window)
+    def open_user_panel(self):
+        from mainwindow import Ui_MainWindow as UiMainWindow
+        self.user_panel = QtWidgets.QMainWindow()
+        self.ui_user = UiMainWindow()
+        self.ui_user.setupUi(self.user_panel)
+        self.user_panel.show()
+        self.close()
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    main_app = MainApp()
-    main_app.show()
+    login_screen = LoginScreen()
+    login_screen.show()
     sys.exit(app.exec())
