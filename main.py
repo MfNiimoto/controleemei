@@ -48,8 +48,15 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 # Conectar o botão de salvar login ao método de salvar login
                 self.ui.salvarLoginButton.clicked.connect(self.save_login)
 
-                # Carregar os dispositivos cadastrados
+                # Conectar o botão de deletar login ao método de deletar login
+                self.ui.deletarLoginButton.clicked.connect(self.delete_login)
+
+                # Conectar o evento de seleção do TreeWidget ao método de preencher campos
+                self.ui.cadastroTwidget.itemSelectionChanged.connect(self.populate_login_fields)
+
+                # Carregar os dispositivos e logins cadastrados
                 self.load_devices()
+                self.load_logins()
 
             def save_device(self):
                 nome = self.ui.nomeTxt.text()
@@ -97,17 +104,9 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                     QtWidgets.QMessageBox.warning(self, "Erro", "Os campos de login e senha não podem estar vazios!")
                     return
 
-                # Perguntar se o usuário é administrador
-                resposta = QtWidgets.QMessageBox.question(
-                    self,
-                    "Confirmação de Permissão",
-                    "O usuário é administrador?",
-                    QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
-                )
+                # Verificar se o login já está selecionado para atualização
+                selected_item = self.ui.cadastroTwidget.currentItem()
 
-                role = "admin" if resposta == QtWidgets.QMessageBox.StandardButton.Yes else "user"
-
-                # Salvar o login no banco de dados
                 with sqlite3.connect('dados.db') as conn:
                     cursor = conn.cursor()
                     # Criar a tabela se não existir
@@ -119,18 +118,65 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                             role TEXT NOT NULL
                         )
                     ''')
-                    # Inserir o novo usuário
-                    try:
+
+                    if selected_item:  # Atualizar o login existente
+                        current_login = selected_item.text(0)
                         cursor.execute('''
-                            INSERT INTO user (username, password, role)
-                            VALUES (?, ?, ?)
-                        ''', (login, senha, role))
-                        conn.commit()
-                        QtWidgets.QMessageBox.information(self, "Sucesso", "Usuário salvo com sucesso!")
-                        self.ui.loginCadastroTxt.clear()
-                        self.ui.senhaCadastroTxt.clear()
-                    except sqlite3.IntegrityError:
-                        QtWidgets.QMessageBox.warning(self, "Erro", "O nome de usuário já existe!")
+                            UPDATE user SET password = ? WHERE username = ?
+                        ''', (senha, current_login))
+                        QtWidgets.QMessageBox.information(self, "Sucesso", "Senha atualizada com sucesso!")
+                    else:  # Inserir um novo login
+                        # Perguntar se o usuário é administrador
+                        resposta = QtWidgets.QMessageBox.question(
+                            self,
+                            "Confirmação de Permissão",
+                            "O usuário é administrador?",
+                            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
+                        )
+
+                        role = "admin" if resposta == QtWidgets.QMessageBox.StandardButton.Yes else "user"
+
+                        try:
+                            cursor.execute('''
+                                INSERT INTO user (username, password, role)
+                                VALUES (?, ?, ?)
+                            ''', (login, senha, role))
+                            QtWidgets.QMessageBox.information(self, "Sucesso", "Usuário salvo com sucesso!")
+                        except sqlite3.IntegrityError:
+                            QtWidgets.QMessageBox.warning(self, "Erro", "O nome de usuário já existe!")
+
+                    conn.commit()
+
+                self.ui.loginCadastroTxt.clear()
+                self.ui.senhaCadastroTxt.clear()
+                self.load_logins()
+
+            def delete_login(self):
+                selected_item = self.ui.cadastroTwidget.currentItem()
+                if not selected_item:
+                    QtWidgets.QMessageBox.warning(self, "Erro", "Nenhum login selecionado para exclusão!")
+                    return
+
+                login = selected_item.text(0)
+                with sqlite3.connect('dados.db') as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM user WHERE username = ?", (login,))
+                    conn.commit()
+
+                QtWidgets.QMessageBox.information(self, "Sucesso", "Login excluído com sucesso!")
+                self.load_logins()
+
+            def populate_login_fields(self):
+                selected_item = self.ui.cadastroTwidget.currentItem()
+                if selected_item:
+                    login = selected_item.text(0)
+                    with sqlite3.connect('dados.db') as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT password FROM user WHERE username = ?", (login,))
+                        result = cursor.fetchone()
+                        if result:
+                            self.ui.loginCadastroTxt.setText(login)
+                            self.ui.senhaCadastroTxt.setText(result[0])
 
             def load_devices(self):
                 # Limpar o widget antes de carregar os dados
@@ -147,6 +193,22 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 for nome, modelo in devices:
                     item = QtWidgets.QTreeWidgetItem([nome, modelo])
                     self.ui.cadastroAparelhosTwidget.addTopLevelItem(item)
+
+            def load_logins(self):
+                # Limpar o widget antes de carregar os dados
+                self.ui.cadastroTwidget.clear()
+
+                # Conectar ao banco de dados e buscar os dados
+                with sqlite3.connect('dados.db') as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT username, role FROM user")
+                    logins = cursor.fetchall()
+
+                # Preencher o TreeWidget com os dados
+                self.ui.cadastroTwidget.setHeaderLabels(["Login", "Permissão"])
+                for username, role in logins:
+                    item = QtWidgets.QTreeWidgetItem([username, role])
+                    self.ui.cadastroTwidget.addTopLevelItem(item)
 
         self.admin_panel = AdminPanel()
         self.admin_panel.show()
