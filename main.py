@@ -3,20 +3,20 @@ import sqlite3
 import sys
 
 # Importação da classe gerada pelo pyuic6 a partir do arquivo login.ui
-from login import Ui_MainWindow as UiLogin
+from login import Ui_LoginForm  # Nome correto da classe gerada pelo pyuic6
 
-class LoginScreen(QtWidgets.QMainWindow):
+class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWindow
     def __init__(self):
         super().__init__()
-        self.ui = UiLogin()
+        self.ui = Ui_LoginForm()
         self.ui.setupUi(self)
 
         # Conecta o botão de login ao método de verificação de login
         self.ui.loginButton.clicked.connect(self.handle_login)
 
     def handle_login(self):
-        username = self.ui.usernameField.text()
-        password = self.ui.passwordField.text()
+        username = self.ui.usernameTxt.text()
+        password = self.ui.senhaTxt.text()
 
         # Verificação no banco de dados
         with sqlite3.connect('dados.db') as conn:
@@ -31,22 +31,18 @@ class LoginScreen(QtWidgets.QMainWindow):
                 else:
                     self.open_user_panel()
             else:
-                self.ui.errorLabel.setText("Usuário ou senha inválidos!")
+                QtWidgets.QMessageBox.warning(self, "Erro", "Usuário ou senha inválidos!")
 
     def open_admin_panel(self):
-        from paineladministrador import Ui_MainWindow as UiAdminPanel
-        self.admin_panel = QtWidgets.QMainWindow()
-        self.ui_admin = UiAdminPanel()
+        from paineladministrador import Ui_PainelAdministrador
+        self.admin_panel = QtWidgets.QWidget()
+        self.ui_admin = Ui_PainelAdministrador()
         self.ui_admin.setupUi(self.admin_panel)
         self.admin_panel.show()
         self.close()
 
     def open_user_panel(self):
-        from mainwindow import Ui_MainWindow as UiMainWindow
-        self.user_panel = QtWidgets.QMainWindow()
-        self.ui_user = UiMainWindow()
-        self.ui_user.setupUi(self.user_panel)
-        self.user_panel.show()
+        QtWidgets.QMessageBox.information(self, "Info", "Painel de usuário ainda não implementado.")
         self.close()
 
 if __name__ == "__main__":
