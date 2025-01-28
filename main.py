@@ -45,8 +45,8 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 # Conectar o botão de salvar ao método de salvar dados
                 self.ui.salvarCadastroButton.clicked.connect(self.save_device)
 
-                # Conectar o botão de deletar ao método de deletar dados
-                self.ui.deletarCadastroButton.clicked.connect(self.delete_device)
+                # Conectar o botão de salvar login ao método de salvar login
+                self.ui.salvarLoginButton.clicked.connect(self.save_login)
 
                 # Carregar os dispositivos cadastrados
                 self.load_devices()
@@ -89,26 +89,48 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 # Atualizar a lista de dispositivos
                 self.load_devices()
 
-            def delete_device(self):
-                # Obter o item selecionado na TreeWidget
-                selected_item = self.ui.cadastroAparelhosTwidget.currentItem()
+            def save_login(self):
+                login = self.ui.loginCadastroTxt.text()
+                senha = self.ui.senhaCadastroTxt.text()
 
-                if selected_item:
-                    # Obter o nome do dispositivo selecionado
-                    nome = selected_item.text(0)
-                    aparelho = selected_item.text(1)
+                if not login or not senha:
+                    QtWidgets.QMessageBox.warning(self, "Erro", "Os campos de login e senha não podem estar vazios!")
+                    return
 
-                    # Excluir o registro do banco de dados
-                    with sqlite3.connect('dados.db') as conn:
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM aparelhos WHERE nome = ? AND modelo = ?", (nome, aparelho))
+                # Perguntar se o usuário é administrador
+                resposta = QtWidgets.QMessageBox.question(
+                    self,
+                    "Confirmação de Permissão",
+                    "O usuário é administrador?",
+                    QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
+                )
+
+                role = "admin" if resposta == QtWidgets.QMessageBox.StandardButton.Yes else "user"
+
+                # Salvar o login no banco de dados
+                with sqlite3.connect('dados.db') as conn:
+                    cursor = conn.cursor()
+                    # Criar a tabela se não existir
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS user (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            username TEXT NOT NULL UNIQUE,
+                            password TEXT NOT NULL,
+                            role TEXT NOT NULL
+                        )
+                    ''')
+                    # Inserir o novo usuário
+                    try:
+                        cursor.execute('''
+                            INSERT INTO user (username, password, role)
+                            VALUES (?, ?, ?)
+                        ''', (login, senha, role))
                         conn.commit()
-
-                    # Atualizar a lista de dispositivos
-                    self.load_devices()
-                    QtWidgets.QMessageBox.information(self, "Sucesso", "Dispositivo excluído com sucesso!")
-                else:
-                    QtWidgets.QMessageBox.warning(self, "Erro", "Nenhum dispositivo selecionado!")
+                        QtWidgets.QMessageBox.information(self, "Sucesso", "Usuário salvo com sucesso!")
+                        self.ui.loginCadastroTxt.clear()
+                        self.ui.senhaCadastroTxt.clear()
+                    except sqlite3.IntegrityError:
+                        QtWidgets.QMessageBox.warning(self, "Erro", "O nome de usuário já existe!")
 
             def load_devices(self):
                 # Limpar o widget antes de carregar os dados
@@ -130,25 +152,9 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
         self.admin_panel.show()
         self.close()
 
-    def open_user_panel(self): # executar a mainwindow.py
-        from mainwindow import Ui_MainWindow
-
-        class UserPanel(QtWidgets.QWidget):
-            def __init__(self):
-                super().__init__()
-                self.ui = Ui_MainWindow()
-                self.ui.setupUi(self)
-
-                # Conectar o botão de salvar ao método de salvar dados
-                self.ui.salvarCadastroButton.clicked.connect(self.save_device)
-
-                # Conectar o botão de deletar ao método de deletar dados
-                self.ui.deletarCadastroButton.clicked.connect(self.delete_device)
-
-                # Carregar os dispositivos cadastrados
-                self.load_devices()
-
-            
+    def open_user_panel(self):
+        QtWidgets.QMessageBox.information(self, "Info", "Painel de usuário ainda não implementado.")
+        self.close()
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
