@@ -215,7 +215,16 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
         self.close()
 
     def open_user_panel(self):
-        QtWidgets.QMessageBox.information(self, "Info", "Painel de usuário ainda não implementado.")
+        from mainwindow import Ui_MainWindow
+
+        class UserPanel(QtWidgets.QMainWindow):  # Alterado para QMainWindow
+            def __init__(self):
+                super().__init__()
+                self.ui = Ui_MainWindow()
+                self.ui.setupUi(self)
+
+        self.user_panel = UserPanel()
+        self.user_panel.show()
         self.close()
 
 if __name__ == "__main__":
