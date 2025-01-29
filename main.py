@@ -230,6 +230,9 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 # Conectar o botão confirmar ao método de registrar movimentação
                 self.ui.confirmarButton.clicked.connect(self.registrar_movimentacao)
 
+                # Carregar as movimentações iniciais
+                self.load_movimentacoes()
+
             def create_movimentacao_table(self):
                 with sqlite3.connect('dados.db') as conn:
                     cursor = conn.cursor()
@@ -265,11 +268,46 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
 
                 QtWidgets.QMessageBox.information(self, "Sucesso", f"Movimentação registrada: {emei} - {novo_estado}")
                 self.ui.entradaSaidaEmeiTxt.clear()
+                self.load_movimentacoes()
+
+            def load_movimentacoes(self):
+                with sqlite3.connect('dados.db') as conn:
+                    cursor = conn.cursor()
+
+                    # Carregar últimas 10 movimentações
+                    cursor.execute('''
+                        SELECT a.nome, m.estado, m.data_hora 
+                        FROM movimentacao m
+                        JOIN aparelhos a ON m.emei = a.emei
+                        ORDER BY m.data_hora DESC LIMIT 10
+                    ''')
+                    registros = cursor.fetchall()
+                    self.ui.recentesTwidget.clear()
+                    self.ui.recentesTwidget.setHeaderLabels(["Agente", "Entrada/Saída", "Horário"])
+                    for nome, estado, data_hora in registros:
+                        item = QtWidgets.QTreeWidgetItem([nome, estado, data_hora])
+                        self.ui.recentesTwidget.addTopLevelItem(item)
+
+                    # Carregar aparelhos com entrada sem saída
+                    cursor.execute('''
+                        SELECT a.nome, a.modelo FROM aparelhos a
+                        WHERE a.emei IN (
+                            SELECT m.emei FROM movimentacao m
+                            GROUP BY m.emei
+                            HAVING MAX(m.data_hora) = (SELECT MAX(data_hora) FROM movimentacao WHERE emei = m.emei AND estado = 'entrada')
+                        )
+                    ''')
+                    registros = cursor.fetchall()
+                    self.ui.previaTwidget.clear()
+                    self.ui.previaTwidget.setHeaderLabels(["Agente", "Aparelho"])
+                    for nome, modelo in registros:
+                        item = QtWidgets.QTreeWidgetItem([nome, modelo])
+                        self.ui.previaTwidget.addTopLevelItem(item)
 
         self.user_panel = UserPanel()
         self.user_panel.show()
         self.close()
-
+        
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     login_screen = LoginScreen()
