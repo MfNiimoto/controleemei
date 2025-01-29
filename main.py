@@ -1,6 +1,7 @@
 from PyQt6 import QtWidgets
 import sqlite3
 import sys
+from datetime import datetime
 
 # Importação da classe gerada pelo pyuic6 a partir do arquivo login.ui
 from login import Ui_LoginForm  # Nome correto da classe gerada pelo pyuic6
@@ -222,6 +223,48 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 super().__init__()
                 self.ui = Ui_MainWindow()
                 self.ui.setupUi(self)
+
+                # Criar a tabela movimentacao caso não exista
+                self.create_movimentacao_table()
+
+                # Conectar o botão confirmar ao método de registrar movimentação
+                self.ui.confirmarButton.clicked.connect(self.registrar_movimentacao)
+
+            def create_movimentacao_table(self):
+                with sqlite3.connect('dados.db') as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS movimentacao (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            emei TEXT NOT NULL,
+                            estado TEXT NOT NULL,
+                            data_hora TEXT NOT NULL
+                        )
+                    ''')
+                    conn.commit()
+
+            def registrar_movimentacao(self):
+                emei = self.ui.entradaSaidaEmeiTxt.text().strip()
+                if not emei:
+                    QtWidgets.QMessageBox.warning(self, "Erro", "O campo EMEI não pode estar vazio!")
+                    return
+
+                with sqlite3.connect('dados.db') as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT estado FROM movimentacao WHERE emei = ? ORDER BY data_hora DESC LIMIT 1", (emei,))
+                    ultimo_registro = cursor.fetchone()
+
+                    if not ultimo_registro:
+                        novo_estado = "entrada"
+                    else:
+                        novo_estado = "saida" if ultimo_registro[0] == "entrada" else "entrada"
+
+                    data_hora_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    cursor.execute("INSERT INTO movimentacao (emei, estado, data_hora) VALUES (?, ?, ?)", (emei, novo_estado, data_hora_atual))
+                    conn.commit()
+
+                QtWidgets.QMessageBox.information(self, "Sucesso", f"Movimentação registrada: {emei} - {novo_estado}")
+                self.ui.entradaSaidaEmeiTxt.clear()
 
         self.user_panel = UserPanel()
         self.user_panel.show()
