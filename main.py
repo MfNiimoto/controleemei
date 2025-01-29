@@ -2,6 +2,7 @@ from PyQt6 import QtWidgets
 import sqlite3
 import sys
 from datetime import datetime
+from login import Ui_LoginForm
 
 # Importação da classe gerada pelo pyuic6 a partir do arquivo login.ui
 from login import Ui_LoginForm  # Nome correto da classe gerada pelo pyuic6
@@ -42,60 +43,95 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 super().__init__()
                 self.ui = Ui_PainelAdministrador()
                 self.ui.setupUi(self)
-
-                # Conectar o botão de salvar ao método de salvar dados
                 self.ui.salvarCadastroButton.clicked.connect(self.save_device)
-
-                # Conectar o botão de salvar login ao método de salvar login
                 self.ui.salvarLoginButton.clicked.connect(self.save_login)
-
-                # Conectar o botão de deletar login ao método de deletar login
                 self.ui.deletarLoginButton.clicked.connect(self.delete_login)
-
-                # Conectar o evento de seleção do TreeWidget ao método de preencher campos
                 self.ui.cadastroTwidget.itemSelectionChanged.connect(self.populate_login_fields)
-
-                # Carregar os dispositivos e logins cadastrados
                 self.load_devices()
                 self.load_logins()
 
-            def save_device(self):
-                nome = self.ui.nomeTxt.text()
-                matricula = self.ui.matriculaTxt.text()
-                modelo = self.ui.modeloTxt.text()
-                emei = self.ui.emeiTxt.text()
-                emei2 = self.ui.emei2Txt.text()
+            def validar_emei(self, emei):
+                if len(emei) != 15 or not emei.isdigit():
+                    return False
+                soma = 0
+                for i, digito in enumerate(map(int, emei)):
+                    if i % 2 == 0:
+                        soma += digito
+                    else:
+                        soma += sum(map(int, str(digito * 2)))
+                return soma % 10 == 0
 
-                # Salvar os dados no banco de dados
+            def save_device(self):
+                nome = self.ui.nomeTxt.text().strip()
+                matricula = self.ui.matriculaTxt.text().strip()
+                modelo = self.ui.modeloTxt.text().strip()
+                emei = self.ui.emeiTxt.text().strip()
+                emei2 = self.ui.emei2Txt.text().strip()
+
+                erros = []
+
+                # Validação do EMEI1 (obrigatório)
+                if not emei:
+                    erros.append("EMEI 1 é obrigatório")
+                else:
+                    if not self.validar_emei(emei):
+                        erros.append("EMEI 1 inválido (deve ter 15 dígitos e ser válido)")
+
+                # Validação do EMEI2 (opcional)
+                if emei2:
+                    if not self.validar_emei(emei2):
+                        erros.append("EMEI 2 inválido (deve ter 15 dígitos e ser válido)")
+
+                # Verificar duplicatas
                 with sqlite3.connect('dados.db') as conn:
                     cursor = conn.cursor()
-                    # Criar a tabela se não existir
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS aparelhos (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            nome TEXT NOT NULL,
-                            matricula INTEGER NOT NULL,
-                            modelo TEXT NOT NULL,
-                            emei TEXT NOT NULL,
-                            emei2 TEXT NOT NULL
-                        )
-                    ''')
-                    # Inserir os dados na tabela
-                    cursor.execute('''
-                        INSERT INTO aparelhos (nome, matricula, modelo, emei, emei2)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (nome, matricula, modelo, emei, emei2))
-                    conn.commit()
+    
+                    query = '''SELECT * FROM aparelhos 
+                                WHERE ? IN (emei, emei2)'''
+                    params = [emei]
+    
+                if emei2:
+                    query += ''' OR ? IN (emei, emei2)'''
+                    params.append(emei2)
+    
+                cursor.execute(query, params)
+    
+                if cursor.fetchone():
+                    erros.append("EMEI já cadastrado no sistema")
 
-                QtWidgets.QMessageBox.information(self, "Sucesso", "Dados salvos com sucesso!")
-                self.ui.nomeTxt.clear()
-                self.ui.matriculaTxt.clear()
-                self.ui.modeloTxt.clear()
-                self.ui.emeiTxt.clear()
-                self.ui.emei2Txt.clear()
+                if erros:
+                    QtWidgets.QMessageBox.warning(self, "Erro de Validação", "\n".join(erros))
+                    return
 
-                # Atualizar a lista de dispositivos
-                self.load_devices()
+                try:
+                    with sqlite3.connect('dados.db') as conn:
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS aparelhos (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                nome TEXT NOT NULL,
+                                matricula INTEGER NOT NULL,
+                                modelo TEXT NOT NULL,
+                                emei TEXT NOT NULL UNIQUE,
+                                emei2 TEXT
+                            )
+                        ''')
+                        cursor.execute('''
+                            INSERT INTO aparelhos (nome, matricula, modelo, emei, emei2)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (nome, matricula, modelo, emei, emei2 or None))
+                        conn.commit()
+
+                    QtWidgets.QMessageBox.information(self, "Sucesso", "Dados salvos com sucesso!")
+                    self.ui.nomeTxt.clear()
+                    self.ui.matriculaTxt.clear()
+                    self.ui.modeloTxt.clear()
+                    self.ui.emeiTxt.clear()
+                    self.ui.emei2Txt.clear()
+                    self.load_devices()
+
+                except sqlite3.IntegrityError as e:
+                    QtWidgets.QMessageBox.warning(self, "Erro", f"Erro ao salvar: {str(e)}")
 
             def save_login(self):
                 login = self.ui.loginCadastroTxt.text()
@@ -180,16 +216,11 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                             self.ui.senhaCadastroTxt.setText(result[0])
 
             def load_devices(self):
-                # Limpar o widget antes de carregar os dados
                 self.ui.cadastroAparelhosTwidget.clear()
-
-                # Conectar ao banco de dados e buscar os dados
                 with sqlite3.connect('dados.db') as conn:
                     cursor = conn.cursor()
                     cursor.execute("SELECT nome, modelo FROM aparelhos")
                     devices = cursor.fetchall()
-
-                # Preencher o TreeWidget com os dados
                 self.ui.cadastroAparelhosTwidget.setHeaderLabels(["Nome", "Modelo"])
                 for nome, modelo in devices:
                     item = QtWidgets.QTreeWidgetItem([nome, modelo])
@@ -254,6 +285,12 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
 
                 with sqlite3.connect('dados.db') as conn:
                     cursor = conn.cursor()
+                    cursor.execute("SELECT emei, emei2 FROM aparelhos WHERE emei = ? OR emei2 = ?", (emei, emei))
+                    aparelho = cursor.fetchone()
+
+                    if aparelho:
+                        emei = aparelho[0]  # Sempre usar o EMEI principal registrado
+
                     cursor.execute("SELECT estado FROM movimentacao WHERE emei = ? ORDER BY data_hora DESC LIMIT 1", (emei,))
                     ultimo_registro = cursor.fetchone()
 
@@ -287,7 +324,7 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                     for nome, estado, data_hora in registros:
                         item = QtWidgets.QTreeWidgetItem([nome, estado, data_hora])
                         self.ui.recentesTwidget.addTopLevelItem(item)
-
+                    
                     # Carregar aparelhos com entrada sem saída
                     cursor.execute('''
                         SELECT a.nome, a.modelo FROM aparelhos a
@@ -303,7 +340,7 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                     for nome, modelo in registros:
                         item = QtWidgets.QTreeWidgetItem([nome, modelo])
                         self.ui.previaTwidget.addTopLevelItem(item)
-
+                    
         self.user_panel = UserPanel()
         self.user_panel.show()
         self.close()
