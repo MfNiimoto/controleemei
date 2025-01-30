@@ -1,8 +1,11 @@
 from PyQt6 import QtWidgets
+from PyQt6.QtWidgets import QFileDialog, QInputDialog
 import sqlite3
+import openpyxl
+from reportlab.pdfgen import canvas
+import os
 import sys
 from datetime import datetime
-from login import Ui_LoginForm
 
 # Importação da classe gerada pelo pyuic6 a partir do arquivo login.ui
 from login import Ui_LoginForm  # Nome correto da classe gerada pelo pyuic6
@@ -258,11 +261,142 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 # Criar a tabela movimentacao caso não exista
                 self.create_movimentacao_table()
 
+                # Configurar botões de exportação
+                self.pasta_exportacao = os.path.expanduser("~")
+                self.ui.pastaTButton.clicked.connect(self.selecionar_pasta)
+                self.ui.relatorioButton.clicked.connect(self.iniciar_geracao_relatorio)
+
                 # Conectar o botão confirmar ao método de registrar movimentação
                 self.ui.confirmarButton.clicked.connect(self.registrar_movimentacao)
 
                 # Carregar as movimentações iniciais
                 self.load_movimentacoes()
+                self.carregar_agentes()
+            
+            
+            def carregar_agentes(self):
+                self.ui.agentesRelatorioCbb.clear()
+                self.ui.agentesRelatorioCbb.addItem("Todos")
+        
+                with sqlite3.connect('dados.db') as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT DISTINCT nome, matricula FROM aparelhos")
+                    for nome, matricula in cursor.fetchall():
+                        self.ui.agentesRelatorioCbb.addItem(f"{nome} ({matricula})", (nome, matricula))
+
+            
+            def selecionar_pasta(self):
+                pasta = QFileDialog.getExistingDirectory(
+                    self,
+                    "Selecionar Pasta de Destino",
+                    self.pasta_exportacao
+                )
+                if pasta:
+                    self.pasta_exportacao = pasta
+
+            def iniciar_geracao_relatorio(self):
+                formato, ok = QInputDialog.getItem(
+                    self,
+                    "Formato do Relatório",
+                    "Selecione o formato:",
+                    ["PDF", "Excel"],
+                    0, False
+                )
+                if ok:
+                    self.gerar_relatorio(formato)
+            
+            def gerar_relatorio(self, formato):
+                # Obter parâmetros
+                agente = self.ui.agentesRelatorioCbb.currentData()
+                data_inicio = self.ui.inicioDate.date().toPyDate()
+                data_final = self.ui.finalDate.date().toPyDate() if self.ui.finalCbox.isChecked() else None
+                emei = self.ui.relatorioEmeiTxt.text().strip()
+
+                # Construir query
+                query = '''
+                    SELECT a.nome, a.matricula, m.estado, m.data_hora
+                    FROM movimentacao m
+                    JOIN aparelhos a ON m.emei = a.emei
+                    WHERE 1=1
+                '''
+                params = []
+
+                # Aplicar filtros
+                if agente and self.ui.agentesRelatorioCbb.currentIndex() > 0:
+                    query += " AND a.nome = ? AND a.matricula = ?"
+                    params.extend(agente)
+                
+                if data_final:
+                    query += " AND m.data_hora BETWEEN ? AND ?"
+                    params.extend([data_inicio, data_final.strftime("%d-%m-%Y 23:59:59")])
+                else:
+                    query += " AND m.data_hora >= ?"
+                    params.append(data_inicio.strftime("%d-%m-%Y"))
+
+                if emei:
+                    query += " AND a.emei = ?"
+                    params.append(emei)
+
+                # Executar consulta
+                with sqlite3.connect('dados.db') as conn:
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+                    cursor.execute(query, params)
+                    dados = cursor.fetchall()
+
+                # Gerar arquivo
+                if formato == "PDF":
+                    self.gerar_pdf(dados)
+                else:
+                    self.gerar_excel(dados)
+
+            
+            def gerar_pdf(self, dados):
+                path, _ = QFileDialog.getSaveFileName(
+                    self,
+                    "Salvar PDF",
+                    os.path.join(self.pasta_exportacao, "relatorio.pdf"),
+                    "PDF Files (*.pdf)"
+                )
+                if not path:
+                    return
+
+                c = canvas.Canvas(path)
+                y = 800
+                c.setFont("Helvetica", 12)
+                
+                for registro in dados:
+                    texto = f"{registro['data_hora']} | {registro['nome']} | {registro['estado']}"
+                    c.drawString(50, y, texto)
+                    y -= 20
+                    if y < 50:
+                        c.showPage()
+                        y = 800
+                c.save()
+
+            def gerar_excel(self, dados):
+                path, _ = QFileDialog.getSaveFileName(
+                    self,
+                    "Salvar Excel",
+                    os.path.join(self.pasta_exportacao, "relatorio.xlsx"),
+                    "Excel Files (*.xlsx)"
+                )
+                if not path:
+                    return
+
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.append(["Data", "Nome", "Matrícula", "Movimento"])
+                
+                for registro in dados:
+                    ws.append([
+                        registro['data_hora'],
+                        registro['nome'],
+                        registro['matricula'],
+                        registro['estado']
+                    ])
+                
+                wb.save(path)
 
             def create_movimentacao_table(self):
                 with sqlite3.connect('dados.db') as conn:
@@ -299,7 +433,7 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                     else:
                         novo_estado = "saida" if ultimo_registro[0] == "entrada" else "entrada"
 
-                    data_hora_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    data_hora_atual = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
                     cursor.execute("INSERT INTO movimentacao (emei, estado, data_hora) VALUES (?, ?, ?)", (emei, novo_estado, data_hora_atual))
                     conn.commit()
 
