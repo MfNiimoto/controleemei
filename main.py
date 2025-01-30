@@ -50,6 +50,7 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 self.ui.salvarLoginButton.clicked.connect(self.save_login)
                 self.ui.deletarLoginButton.clicked.connect(self.delete_login)
                 self.ui.cadastroTwidget.itemSelectionChanged.connect(self.populate_login_fields)
+                self.ui.deletarCadastroButton.clicked.connect(self.delete_device)
                 self.load_devices()
                 self.load_logins()
 
@@ -228,6 +229,41 @@ class LoginScreen(QtWidgets.QWidget):  # Alterado para QWidget em vez de QMainWi
                 for nome, modelo in devices:
                     item = QtWidgets.QTreeWidgetItem([nome, modelo])
                     self.ui.cadastroAparelhosTwidget.addTopLevelItem(item)
+
+            def delete_device(self):
+                selected_item = self.ui.cadastroAparelhosTwidget.currentItem()
+                if not selected_item:
+                    QtWidgets.QMessageBox.warning(self, "Erro", "Nenhum aparelho selecionado para exclusão!")
+                    return
+                
+                # Get the agent name and device model from the selected item
+                nome = selected_item.text(0)
+                modelo = selected_item.text(1)
+                
+                # Confirm deletion with the user
+                resposta = QtWidgets.QMessageBox.question(
+                    self,
+                    "Confirmar Exclusão",
+                    f"Tem certeza que deseja excluir o aparelho {modelo} do agente {nome}?",
+                    QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
+                )
+                
+                if resposta == QtWidgets.QMessageBox.StandardButton.Yes:
+                    try:
+                        with sqlite3.connect('dados.db') as conn:
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM aparelhos WHERE nome = ? AND modelo = ?", (nome, modelo))
+                            
+                            if cursor.rowcount > 0:
+                                QtWidgets.QMessageBox.information(self, "Sucesso", "Aparelho excluído com sucesso!")
+                                self.load_devices()  # Refresh the device list
+                            else:
+                                QtWidgets.QMessageBox.warning(self, "Erro", "Não foi possível encontrar o aparelho para exclusão.")
+                            
+                            conn.commit()
+                
+                    except sqlite3.Error as e:
+                        QtWidgets.QMessageBox.critical(self, "Erro", f"Erro ao excluir o aparelho: {str(e)}")
 
             def load_logins(self):
                 # Limpar o widget antes de carregar os dados
