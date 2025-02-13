@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QTreeWidgetItem, QMessageBox
 from datetime import datetime
 from relatorios import Ui_Form
 
+# Software desenvolvido por Marcos Flávio Brandt em conjunto com Unidade Penal Ricardo Brandão - UPRB
 
 class RelatorioApp(QtWidgets.QWidget):
     def __init__(self):
@@ -63,7 +64,7 @@ class RelatorioApp(QtWidgets.QWidget):
 
             params = []
             if not inicial:
-                query += " WHERE m.data_hora BETWEEN ? AND ?"
+                query += " WHERE m.data_hora BETWEEN ? AND ?" 
                 params.extend([inicio_data + " 00:00:00", final_data + " 23:59:59"])
 
                 if nome_filtro and nome_filtro.lower() != "todos":
@@ -84,7 +85,7 @@ class RelatorioApp(QtWidgets.QWidget):
             self.ui.exibicaoTwidget.clear()
             movimentos = {}
 
-            for emei, estado, data_hora, nome, modelo in resultados:
+            for emei, estado, data_hora, nome, modelo in resultados: 
                 data_hora_formatada = datetime.strptime(data_hora, "%Y-%m-%d %H:%M:%S").strftime("%d-%m-%Y %H:%M:%S")
                 chave = (nome, modelo, emei)
                 if chave not in movimentos:
